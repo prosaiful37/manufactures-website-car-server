@@ -6,6 +6,8 @@ require("dotenv").config();
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 const port = process.env.PORT || 5000;
 
+const stripe = require('stripe')('process.env.STRIPE_SECRETE_KEY')
+
 //middel ware
 app.use(cors());
 app.use(express.json());
@@ -22,21 +24,30 @@ async function run() {
     await client.connect();
     const partsCollection = client.db('car_parts').collection('parts');
     const orderCollection = client.db('car_parts').collection('orders');
-    const userCollection = client.db('car_parts').collection('users');
+    const usersCollection = client.db('car_parts').collection('users');
 
 
-
-    app.put('users/:email', async(req, res) => {
+    app.put("/users/:email", async (req, res) => {
       const email = req.params.email;
       const user = req.body;
-      const filter = {email: email};
+      const filter = { email: email };
       const options = { upsert: true };
       const updateDoc = {
         $set: user,
-
       };
-      const result = await userCollection.updateOne(filter, options, updateDoc);
-      res.send(result);
+      const result = await usersCollection.updateOne(
+        filter,
+        updateDoc,
+        options
+      );
+      res.send(result)
+      
+    });
+
+
+    app.get('/users', async(req, res) => {
+      const users = await usersCollection.find().toArray()
+      res.send(users);
     })
 
     app.get('/parts', async(req, res) => {
@@ -86,6 +97,18 @@ async function run() {
     })
 
 
+    app.post("/create-payment-intent", async(req, res) =>{
+        const order = req.body;
+        const price = order.price;
+        const amount = price*100;
+
+        const paymentIntent = await stripe.paymentIntents.create({
+          amount: amount,
+          currency: "usd",
+          payment_methods_type:['card']
+        });
+        res.send({clientSecret: paymentIntent.client_secret})
+    })
 
   } 
   finally {
